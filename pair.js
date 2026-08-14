@@ -50,6 +50,7 @@ router.get('/', async (req, res) => {
 
     const id = makeid(6);
     store.createEntry(id);
+    let sessionHandled = false; // guards against duplicate 'open' events across reconnect attempts
 
     async function JUNEX() {
         const { state, saveCreds } = await useMultiFileAuthState('./temp/' + id);
@@ -76,7 +77,13 @@ router.get('/', async (req, res) => {
                 const { connection, lastDisconnect } = s;
 
                 if (connection === 'open') {
+                    if (sessionHandled) return; // already generated a session for this pairing, ignore repeat 'open' events
+                    sessionHandled = true;
                     try {
+                        // Grace period so the Signal session between this bot and the
+                        // phone finishes syncing before we send anything — sending too
+                        // early is what causes "Waiting for this message" on WhatsApp.
+                        await delay(4000);
                         await client.sendMessage(client.user.id, {
                             text: 'Generating your session, please wait a moment...'
                         });
@@ -111,6 +118,7 @@ router.get('/', async (req, res) => {
                         removeFile('./temp/' + id);
                     } catch (e) {
                         console.log('Error sending session messages:', e);
+                        sessionHandled = false; // allow a genuine retry on the next reconnect
                         store.setFailed(id, 'The device link did not finish in time. Please generate a new code and try again.');
                     }
                 } else if (connection === 'close') {
