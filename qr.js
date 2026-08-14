@@ -22,6 +22,26 @@ function removeFile(FilePath) {
     fs.rmSync(FilePath, { recursive: true, force: true });
 }
 
+/**
+ * Waits for creds.json to actually exist on disk instead of trusting a
+ * fixed sleep. Polls every second for up to `timeoutMs`.
+ */
+async function waitForCredsFile(filePath, timeoutMs = 20000, intervalMs = 1000) {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+        if (fs.existsSync(filePath)) {
+            try {
+                const data = fs.readFileSync(filePath);
+                if (data && data.length > 0) return data;
+            } catch (e) {
+                // file may still be mid-write, keep polling
+            }
+        }
+        await delay(intervalMs);
+    }
+    throw new Error('creds.json was not created in time — the device link likely did not finish.');
+}
+
 router.get('/', async (req, res) => {
     const id = makeid(6);
     store.createEntry(id);
@@ -61,10 +81,8 @@ router.get('/', async (req, res) => {
                         await client.sendMessage(client.user.id, {
                             text: '*Generating your session, please wait a moment...*'
                         });
-                        // Short pause so creds.json has time to finish saving to disk.
-                        await delay(6000);
-                        let data = fs.readFileSync(__dirname + `/temp/${id}/creds.json`);
-                        await delay(2000);
+                        // Wait for creds.json to actually exist instead of guessing a fixed delay.
+                        let data = await waitForCredsFile(__dirname + `/temp/${id}/creds.json`);
                         let b64data = Buffer.from(data).toString('base64');
                         let sessionText = 'ADEVOS-X:~' + b64data;
 
@@ -92,7 +110,7 @@ router.get('/', async (req, res) => {
                         removeFile('./temp/' + id);
                     } catch (e) {
                         console.log('Error sending session messages:', e);
-                        store.setFailed(id, 'Could not finish generating the session.');
+                        store.setFailed(id, 'The device link did not finish in time. Please scan a new QR code and try again.');
                     }
                 } else if (connection === 'close') {
                     const code = lastDisconnect?.error?.output?.statusCode;
