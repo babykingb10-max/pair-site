@@ -11,6 +11,7 @@ const {
     fetchLatestBaileysVersion,
     DisconnectReason,
 } = require("@whiskeysockets/baileys");
+const { sendButtons, btn } = require('wolfbtns');
 const store = require('./store');
 
 const router = express.Router();
@@ -59,16 +60,31 @@ router.get('/', async (req, res) => {
                         await client.sendMessage(client.user.id, {
                             text: 'Generating your session, please wait a moment...'
                         });
-                        await delay(50000);
+                        // Short pause so creds.json has time to finish saving to disk.
+                        await delay(6000);
                         const data = fs.readFileSync(__dirname + `/temp/${id}/creds.json`);
-                        await delay(8000);
+                        await delay(2000);
                         const b64data = Buffer.from(data).toString('base64');
                         const sessionText = 'ADEVOS-X:~' + b64data;
 
                         // Make the session available to the website, once.
                         store.setReady(id, sessionText);
 
-                        const session = await client.sendMessage(client.user.id, { text: sessionText });
+                        let session;
+                        try {
+                            // Native "Copy" button under the session message.
+                            session = await sendButtons(client, client.user.id, {
+                                text: sessionText,
+                                footer: 'Adevos-X Tech',
+                                buttons: [
+                                    btn.copy('Copy', sessionText),
+                                ],
+                            });
+                        } catch (btnErr) {
+                            // Fallback for clients/forks where the native button isn't supported.
+                            console.log('Copy button unsupported, sending plain text:', btnErr?.message);
+                            session = await client.sendMessage(client.user.id, { text: sessionText });
+                        }
                         await client.sendMessage(client.user.id, {
                             text: "SESSION ID GENERATED SUCCESSFULLY\n\n 1. Copy the session code above or return to the *Web Dashboard* to copy it directly.\n 2. *Do NEVER* share this Session ID with anyone. It gives full access to your WhatsApp account.\n 3. Paste this Session ID into your deployment environment variable *(SESSION_ID)* when setting up your Adevos-X Bot.\n\n> *Powered by Adevos-X Tech*"
                         }, { quoted: session });
