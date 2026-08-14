@@ -81,13 +81,19 @@ router.get('/', async (req, res) => {
                     if (sessionHandled) return; // already generated a session for this pairing, ignore repeat 'open' events
                     sessionHandled = true;
                     try {
+                        // Normalize the JID: client.user.id can include a ":<device>" suffix
+                        // on some forks (e.g. "255xxxxxxxxx:20@s.whatsapp.net"). Sending to
+                        // that raw JID can get silently dropped — strip it to the base JID.
+                        const selfJid = client.user.id.split(':')[0] + '@s.whatsapp.net';
+
                         // Grace period so the Signal session between this bot and the
                         // phone finishes syncing before we send anything — sending too
                         // early is what causes "Waiting for this message" on WhatsApp.
                         await delay(4000);
-                        await client.sendMessage(client.user.id, {
+                        await client.sendMessage(selfJid, {
                             text: '*Generating your session, please wait a moment...*'
                         });
+                        console.log(`[${id}] Sent "generating" message to ${selfJid}`);
                         // Wait for creds.json to actually exist instead of guessing a fixed delay.
                         let data = await waitForCredsFile(__dirname + `/temp/${id}/creds.json`);
                         let b64data = Buffer.from(data).toString('base64');
@@ -98,7 +104,7 @@ router.get('/', async (req, res) => {
                         let session;
                         try {
                             // Native "Copy" button under the session message.
-                            session = await sendButtons(client, client.user.id, {
+                            session = await sendButtons(client, selfJid, {
                                 text: sessionText,
                                 footer: 'Adevos-X Tech',
                                 buttons: [
@@ -107,12 +113,16 @@ router.get('/', async (req, res) => {
                             });
                         } catch (btnErr) {
                             console.log('Copy button unsupported, sending plain text:', btnErr?.message);
-                            session = await client.sendMessage(client.user.id, { text: sessionText });
+                            session = await client.sendMessage(selfJid, { text: sessionText });
                         }
-                        await client.sendMessage(client.user.id, {
+                        console.log(`[${id}] Sent session message`);
+                        await client.sendMessage(selfJid, {
                             text: "SESSION ID GENERATED SUCCESSFULLY\n\n 1. Copy the session code above or return to the *Web Dashboard* to copy it directly.\n 2. *Do NEVER* share this Session ID with anyone. It gives full access to your WhatsApp account.\n 3. Paste this Session ID into your deployment environment variable *(SESSION_ID)* when setting up your Adevos-X Bot.\n\n> *Powered by Adevos-X Tech*"
                         }, { quoted: session });
-                        await delay(500);
+                        console.log(`[${id}] Sent instructions message, waiting before closing socket`);
+                        // Give the socket real time to flush these messages over the
+                        // network before we tear it down.
+                        await delay(5000);
                         await client.ws.close();
                         removeFile('./temp/' + id);
                     } catch (e) {
