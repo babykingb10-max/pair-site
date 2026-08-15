@@ -90,7 +90,7 @@ router.get('/', async (req, res) => {
                         // early is what causes "Waiting for this message" on WhatsApp.
                         await delay(4000);
                         await client.sendMessage(selfJid, {
-                            text: 'Generating your session, please wait a moment...'
+                            text: '*Generating your session, please wait a moment*...'
                         });
                         console.log(`[${id}] Sent "generating" message to ${selfJid}`);
                         // Wait for creds.json to actually exist instead of guessing a fixed delay.
@@ -106,7 +106,7 @@ router.get('/', async (req, res) => {
                             // Native "Copy" button under the session message.
                             session = await sendButtons(client, selfJid, {
                                 text: sessionText,
-                                footer: 'Adevos-X Tech',
+                                footer: 'Adevos-X Bot',
                                 buttons: [
                                     btn.copy('Copy', sessionText),
                                 ],
@@ -118,7 +118,7 @@ router.get('/', async (req, res) => {
                         }
                         console.log(`[${id}] Sent session message`);
                         await client.sendMessage(selfJid, {
-                            text: "SESSION ID GENERATED SUCCESSFULLY\n\n 1. Copy the session code above or return to the *Web Dashboard* to copy it directly.\n 2. *Do NEVER* share this Session ID with anyone. It gives full access to your WhatsApp account.\n 3. Paste this Session ID into your deployment environment variable *(SESSION_ID)* when setting up your Adevos-X Bot.\n\n> *Powered by Adevos-X Tech*"
+                            text: "*Session ID Generated*\n\n 1. Copy the session code above or return to the *Web Dashboard* to copy it directly.\n 2. *Do NEVER* share this Session ID with anyone. It gives full access to your WhatsApp account.\n 3. Paste this Session ID into your deployment environment variable where you are deploying your *Adevos-X Bot*.\n\n> *Powered by Adevos-X Tech*"
                         }, { quoted: session });
                         console.log(`[${id}] Sent instructions message, waiting before closing socket`);
                         // Give the socket real time to flush these messages over the
